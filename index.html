@@ -9,28 +9,29 @@
 
 <body>
 
+<div class="container">
+
 <h1>Daily Task Manager</h1>
 
 <div class="task-input">
 
-    <input type="text" id="taskInput" placeholder="Enter your task">
+<input type="text" id="taskInput" placeholder="Enter your task">
 
-    <input type="time" id="taskTime">
+<input type="time" id="taskTime">
 
-    <button onclick="addTask()">Add Task</button>
+<button class="add-btn" onclick="addTask()">Add</button>
 
 </div>
-
 
 <h2>Today's Tasks</h2>
 
 <ul id="taskList"></ul>
 
-
 <h2>Completed Tasks</h2>
 
 <ul id="completedList"></ul>
 
+</div>
 
 <script src="script.js"></script>
 
