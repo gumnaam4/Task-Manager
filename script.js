@@ -1,110 +1,146 @@
 /**
- * script.js — Daily Task Manager (PWA Edition)
- * ─────────────────────────────────────────────────────────────
- * Features:
- *   • Add / complete / delete tasks
- *   • LocalStorage persistence
- *   • Auto-reset at midnight with carry-forward modal
- *   • Progress bar
- *   • Dark mode toggle
- *   • Confetti animation on all-tasks-complete
- *   • PWA install prompt (service worker + manifest)
- *   • Web Notifications / Alarm at task time
- *   • Share tasks as structured text (native share + clipboard)
- * ─────────────────────────────────────────────────────────────
+ * script.js — Daily Task Manager PWA
+ * ────────────────────────────────────────────────────────────────
+ *  Features:
+ *    ✦ Add / complete / delete tasks with animations
+ *    ✦ LocalStorage persistence + midnight auto-reset
+ *    ✦ Carry-forward modal for incomplete tasks
+ *    ✦ Progress bar
+ *    ✦ Dark mode (system preference + toggle)
+ *    ✦ Confetti on all-complete
+ *    ✦ PWA: Service Worker + manifest (installable, works offline)
+ *    ✦ First-visit onboarding (3-step: welcome → install → notifs)
+ *    ✦ Install banner for returning visitors
+ *    ✦ Web Notifications alarm at task time (30-second polling)
+ *    ✦ PDF generation (jsPDF) + native Web Share API
+ *    ✦ Copy plain text to clipboard as fallback
+ * ────────────────────────────────────────────────────────────────
  */
 
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    STATE
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 /** @type {{ id:string, name:string, time:string, done:boolean, createdAt:number, notified:boolean }[]} */
-let tasks = [];
+let tasks     = [];
 let savedDate = '';
 
-/* ════════════════════════════════════════════
-   CONSTANTS
-════════════════════════════════════════════ */
-const LS_TASKS        = 'dtm_tasks_v3';
-const LS_DATE         = 'dtm_date_v3';
-const LS_THEME        = 'dtm_theme_v1';
-const LS_NOTIF_DENIED = 'dtm_notif_denied';
-const LS_INSTALL_DISMISSED = 'dtm_install_dismissed';
+/* ══════════════════════════════════════════
+   KEYS
+═══════════════════════════════════════════ */
+const LS_TASKS       = 'dtm_tasks_v4';
+const LS_DATE        = 'dtm_date_v4';
+const LS_THEME       = 'dtm_theme_v1';
+const LS_ONBOARDED   = 'dtm_onboarded_v1';
+const LS_INSTALL_DIS = 'dtm_install_dismissed';
 
-/* ════════════════════════════════════════════
-   DOM REFERENCES
-════════════════════════════════════════════ */
-const $todayDate        = document.getElementById('today-date');
-const $taskName         = document.getElementById('task-name');
-const $taskTime         = document.getElementById('task-time');
-const $addBtn           = document.getElementById('add-task-btn');
-const $pendingList      = document.getElementById('pending-list');
-const $doneList         = document.getElementById('done-list');
-const $pendingEmpty     = document.getElementById('pending-empty');
-const $doneEmpty        = document.getElementById('done-empty');
-const $pendingCount     = document.getElementById('pending-count');
-const $doneCount        = document.getElementById('done-count');
-const $clearAll         = document.getElementById('clear-all-btn');
-const $clearDone        = document.getElementById('clear-done-btn');
-const $progressFill     = document.getElementById('progress-fill');
-const $progressLabel    = document.getElementById('progress-label');
-const $progressPct      = document.getElementById('progress-pct');
-const $progressTrack    = document.getElementById('progress-track');
-const $themeToggle      = document.getElementById('theme-toggle');
-const $carryModal       = document.getElementById('carry-modal');
-const $carryCount       = document.getElementById('carry-count');
-const $modalDiscard     = document.getElementById('modal-discard');
-const $modalCarry       = document.getElementById('modal-carry');
-const $confettiCanvas   = document.getElementById('confetti-canvas');
-const $installBanner    = document.getElementById('install-banner');
-const $installBtn       = document.getElementById('install-btn');
-const $installDismiss   = document.getElementById('install-dismiss');
-const $notifBanner      = document.getElementById('notif-banner');
-const $notifAllowBtn    = document.getElementById('notif-allow-btn');
-const $notifDenyBtn     = document.getElementById('notif-deny-btn');
-const $bellBtn          = document.getElementById('bell-btn');
-const $bellDot          = document.getElementById('bell-dot');
-const $shareBtn         = document.getElementById('share-btn');
-const $shareModal       = document.getElementById('share-modal');
-const $shareModalClose  = document.getElementById('share-modal-close');
-const $sharePreview     = document.getElementById('share-preview');
-const $shareCopyBtn     = document.getElementById('share-copy-btn');
-const $shareNativeBtn   = document.getElementById('share-native-btn');
-const $copyLabel        = document.getElementById('copy-label');
+/* ══════════════════════════════════════════
+   DOM
+═══════════════════════════════════════════ */
+const $date          = document.getElementById('today-date');
+const $taskName      = document.getElementById('task-name');
+const $taskTime      = document.getElementById('task-time');
+const $addBtn        = document.getElementById('add-task-btn');
+const $pendingList   = document.getElementById('pending-list');
+const $doneList      = document.getElementById('done-list');
+const $pendingEmpty  = document.getElementById('pending-empty');
+const $doneEmpty     = document.getElementById('done-empty');
+const $pendingCount  = document.getElementById('pending-count');
+const $doneCount     = document.getElementById('done-count');
+const $clearAll      = document.getElementById('clear-all-btn');
+const $clearDone     = document.getElementById('clear-done-btn');
+const $progFill      = document.getElementById('progress-fill');
+const $progLabel     = document.getElementById('progress-label');
+const $progPct       = document.getElementById('progress-pct');
+const $progTrack     = document.getElementById('progress-track');
+const $themeBtn      = document.getElementById('theme-toggle');
+const $bellBtn       = document.getElementById('bell-btn');
+const $bellDot       = document.getElementById('bell-dot');
+const $carryModal    = document.getElementById('carry-modal');
+const $carryCount    = document.getElementById('carry-count');
+const $modalDiscard  = document.getElementById('modal-discard');
+const $modalCarry    = document.getElementById('modal-carry');
+const $confetti      = document.getElementById('confetti-canvas');
+const $installBanner = document.getElementById('install-banner');
+const $installBtn    = document.getElementById('install-btn');
+const $installDismiss= document.getElementById('install-dismiss');
+const $shareBtn      = document.getElementById('share-btn');
+const $shareModal    = document.getElementById('share-modal');
+const $shareClose    = document.getElementById('share-modal-close');
+const $pdfDatePrev   = document.getElementById('pdf-date-preview');
+const $pdfTasksPrev  = document.getElementById('pdf-tasks-preview');
+const $pdfFooter     = document.getElementById('pdf-footer-preview');
+const $copyBtn       = document.getElementById('share-copy-btn');
+const $copyLabel     = document.getElementById('copy-label');
+const $dlPdfBtn      = document.getElementById('download-pdf-btn');
+const $pdfBtnLabel   = document.getElementById('pdf-btn-label');
+const $shareNative   = document.getElementById('share-native-btn');
+const $toast         = document.getElementById('toast');
 
-/* ════════════════════════════════════════════
-   UTILITIES
-════════════════════════════════════════════ */
+// Onboarding
+const $onboardModal  = document.getElementById('onboard-modal');
+const $step1         = document.getElementById('onboard-step-1');
+const $step2         = document.getElementById('onboard-step-2');
+const $step3         = document.getElementById('onboard-step-3');
+const $next1         = document.getElementById('onboard-next-1');
+const $onboardInstall= document.getElementById('onboard-install-btn');
+const $skip2         = document.getElementById('onboard-skip');
+const $allowNotif    = document.getElementById('onboard-allow-notif');
+const $skipNotif     = document.getElementById('onboard-skip-notif');
+const $$dots         = document.querySelectorAll('.onboard-dot');
+
+/* ══════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════ */
 
 function todayISO() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function pad(n){ return String(n).padStart(2,'0'); }
+
+function formatDate(d = new Date()) {
+  return d.toLocaleDateString('en-US', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 }
 
-function formatDate(date = new Date()) {
-  return date.toLocaleDateString('en-US', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-}
-
-/** "14:30" → "2:30 PM" */
-function formatTime(timeStr) {
-  if (!timeStr) return '';
-  const [h, m] = timeStr.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
+/** "14:05" → "2:05 PM" */
+function fmtTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  return `${h%12||12}:${pad(m)} ${h>=12?'PM':'AM'}`;
 }
 
 function uid() {
   return Math.random().toString(36).slice(2,10) + Date.now().toString(36);
 }
 
-/** Returns current time as "HH:MM" */
-function currentTimeHHMM() {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+function hhMM() {
+  const n = new Date();
+  return `${pad(n.getHours())}:${pad(n.getMinutes())}`;
 }
 
-/* ════════════════════════════════════════════
+/* ── Toast helper ── */
+let toastTimer;
+function showToast(msg, dur = 2800) {
+  $toast.removeAttribute('hidden');
+  $toast.textContent = msg;
+  requestAnimationFrame(() => requestAnimationFrame(() => $toast.classList.add('show')));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    $toast.classList.remove('show');
+    setTimeout(() => $toast.setAttribute('hidden',''), 300);
+  }, dur);
+}
+
+/* ── Shake ── */
+(function(){
+  const s = document.createElement('style');
+  s.textContent=`@keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}.shake{animation:shake .45s ease;}`;
+  document.head.appendChild(s);
+})();
+
+/* ══════════════════════════════════════════
    LOCAL STORAGE
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
 function saveTasks() {
   localStorage.setItem(LS_TASKS, JSON.stringify(tasks));
@@ -114,663 +150,849 @@ function saveTasks() {
 function loadTasks() {
   try {
     const raw = localStorage.getItem(LS_TASKS);
-    tasks = raw ? JSON.parse(raw) : [];
+    tasks     = raw ? JSON.parse(raw) : [];
     savedDate = localStorage.getItem(LS_DATE) || todayISO();
-  } catch {
-    tasks = []; savedDate = todayISO();
-  }
+  } catch { tasks = []; savedDate = todayISO(); }
 }
 
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    MIDNIGHT RESET
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
-function checkDayRollover() {
+function checkRollover() {
   const today = todayISO();
   if (savedDate && savedDate !== today) {
-    const incomplete = tasks.filter(t => !t.done);
-    if (incomplete.length > 0) {
-      $carryCount.textContent = incomplete.length;
-      openCarryModal();
-    } else {
-      resetForNewDay(false);
-    }
+    const inc = tasks.filter(t => !t.done);
+    if (inc.length) { $carryCount.textContent = inc.length; openModal($carryModal); }
+    else resetDay(false);
   }
 }
 
-function resetForNewDay(keepIncomplete) {
-  tasks = keepIncomplete
-    ? tasks.filter(t => !t.done).map(t => ({ ...t, notified: false, createdAt: Date.now() }))
+function resetDay(keepPending) {
+  tasks = keepPending
+    ? tasks.filter(t=>!t.done).map(t=>({...t, notified:false, createdAt:Date.now()}))
     : [];
-  saveTasks();
-  renderAll();
+  saveTasks(); renderAll();
 }
 
-function scheduleMidnightCheck() {
-  setInterval(() => {
-    const today = todayISO();
-    if (savedDate !== today) {
-      savedDate = today;
-      const incomplete = tasks.filter(t => !t.done);
-      if (incomplete.length > 0) {
-        $carryCount.textContent = incomplete.length;
-        openCarryModal();
-      } else {
-        resetForNewDay(false);
-      }
-    }
-  }, 60_000);
-}
+setInterval(() => {
+  const today = todayISO();
+  if (savedDate !== today) {
+    savedDate = today;
+    const inc = tasks.filter(t=>!t.done);
+    if (inc.length) { $carryCount.textContent = inc.length; openModal($carryModal); }
+    else resetDay(false);
+  }
+}, 60_000);
 
-/* ════════════════════════════════════════════
-   CARRY-FORWARD MODAL
-════════════════════════════════════════════ */
+/* Carry-forward */
+$modalCarry.addEventListener('click',   () => { closeModal($carryModal); resetDay(true);  });
+$modalDiscard.addEventListener('click', () => { closeModal($carryModal); resetDay(false); });
+$carryModal.addEventListener('click', e => { if(e.target===$carryModal){ closeModal($carryModal); resetDay(false); } });
 
-function openCarryModal()  { $carryModal.removeAttribute('hidden'); $modalCarry.focus(); }
-function closeCarryModal() { $carryModal.setAttribute('hidden', ''); }
-
-$modalCarry.addEventListener('click',   () => { closeCarryModal(); resetForNewDay(true);  });
-$modalDiscard.addEventListener('click', () => { closeCarryModal(); resetForNewDay(false); });
-$carryModal.addEventListener('click', (e) => {
-  if (e.target === $carryModal) { closeCarryModal(); resetForNewDay(false); }
-});
-
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    TASK CRUD
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
 function addTask() {
   const name = $taskName.value.trim();
   if (!name) {
     $taskName.classList.add('shake');
-    setTimeout(() => $taskName.classList.remove('shake'), 500);
+    setTimeout(()=>$taskName.classList.remove('shake'), 500);
     $taskName.focus(); return;
   }
-  const task = { id: uid(), name, time: $taskTime.value, done: false, createdAt: Date.now(), notified: false };
-  tasks.unshift(task);
-  saveTasks();
-  renderAll();
-  $taskName.value = '';
-  $taskTime.value = '';
+  tasks.unshift({ id:uid(), name, time:$taskTime.value, done:false, createdAt:Date.now(), notified:false });
+  saveTasks(); renderAll();
+  $taskName.value = ''; $taskTime.value = '';
   $taskName.focus();
+  showToast('Task added ✓');
 }
 
 function toggleTask(id) {
-  const task = tasks.find(t => t.id === id);
-  if (!task) return;
-  task.done = !task.done;
+  const t = tasks.find(t=>t.id===id);
+  if (!t) return;
+  t.done = !t.done;
   saveTasks();
-  const doneNum = tasks.filter(t => t.done).length;
-  if (tasks.length > 0 && doneNum === tasks.length) launchConfetti();
+  if (tasks.length && tasks.every(t=>t.done)) launchConfetti();
   renderAll();
 }
 
-function deleteTask(id, itemEl) {
-  itemEl.classList.add('task-item--removing');
-  itemEl.addEventListener('animationend', () => {
-    tasks = tasks.filter(t => t.id !== id);
+function deleteTask(id, el) {
+  el.classList.add('task-item--removing');
+  el.addEventListener('animationend', () => {
+    tasks = tasks.filter(t=>t.id!==id);
     saveTasks(); renderAll();
-  }, { once: true });
+  }, { once:true });
 }
 
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    RENDER
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
 function renderAll() {
-  const pending   = tasks.filter(t => !t.done);
-  const completed = tasks.filter(t =>  t.done);
+  const pending   = tasks.filter(t=>!t.done);
+  const completed = tasks.filter(t=> t.done);
   renderList($pendingList, pending,   false);
   renderList($doneList,    completed, true);
-  toggleEmptyState($pendingEmpty, pending.length   === 0);
-  toggleEmptyState($doneEmpty,   completed.length  === 0);
+  $pendingEmpty.classList.toggle('visible', !pending.length);
+  $doneEmpty.classList.toggle('visible',    !completed.length);
   $pendingCount.textContent = pending.length;
   $doneCount.textContent    = completed.length;
   updateProgress(tasks.length, completed.length);
 }
 
-function renderList(ul, list, isDoneList) {
+function renderList(ul, list, isDone) {
   ul.innerHTML = '';
-  const sorted = [...list].sort((a, b) => {
-    if (!isDoneList) {
+  [...list].sort((a,b)=>{
+    if (!isDone) {
       if (!a.time && !b.time) return 0;
-      if (!a.time) return 1;
-      if (!b.time) return -1;
+      if (!a.time) return 1; if (!b.time) return -1;
       return a.time.localeCompare(b.time);
     }
     return b.createdAt - a.createdAt;
-  });
-  sorted.forEach(task => ul.appendChild(buildTaskItem(task)));
+  }).forEach(t => ul.appendChild(buildItem(t)));
 }
 
-function buildTaskItem(task) {
+function buildItem(task) {
   const li = document.createElement('li');
-  li.className  = 'task-item' + (task.done ? ' task-item--done' : '') + (task.time ? ' task-item--has-alarm' : '');
+  li.className = 'task-item'
+    + (task.done ? ' task-item--done' : '')
+    + (task.time ? ' task-item--has-alarm' : '');
   li.dataset.id = task.id;
 
-  // Check button
-  const checkBtn = document.createElement('button');
-  checkBtn.className = 'task-check';
-  checkBtn.setAttribute('aria-label', task.done ? 'Mark as pending' : 'Mark as complete');
-  checkBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg>`;
-  checkBtn.addEventListener('click', () => toggleTask(task.id));
+  // Check
+  const chk = document.createElement('button');
+  chk.className = 'task-check';
+  chk.setAttribute('aria-label', task.done ? 'Mark pending' : 'Mark complete');
+  chk.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg>`;
+  chk.addEventListener('click', () => toggleTask(task.id));
 
   // Body
   const body = document.createElement('div');
   body.className = 'task-body';
-  const nameSpan = document.createElement('span');
-  nameSpan.className   = 'task-name';
-  nameSpan.textContent = task.name;
-  nameSpan.title       = task.name;
-  const timeSpan = document.createElement('span');
-  timeSpan.className   = 'task-time';
-  timeSpan.textContent = task.time ? formatTime(task.time) : 'No time set';
-  body.appendChild(nameSpan);
-  body.appendChild(timeSpan);
+  const nm = document.createElement('span'); nm.className='task-name'; nm.textContent=task.name; nm.title=task.name;
+  const tm = document.createElement('span'); tm.className='task-time'; tm.textContent=task.time?fmtTime(task.time):'No time set';
+  body.appendChild(nm); body.appendChild(tm);
 
-  // Delete button
-  const delBtn = document.createElement('button');
-  delBtn.className = 'task-delete';
-  delBtn.setAttribute('aria-label', 'Delete task');
-  delBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
-  delBtn.addEventListener('click', () => deleteTask(task.id, li));
+  // Delete
+  const del = document.createElement('button');
+  del.className = 'task-delete';
+  del.setAttribute('aria-label','Delete task');
+  del.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  del.addEventListener('click', () => deleteTask(task.id, li));
 
-  li.appendChild(checkBtn);
-  li.appendChild(body);
-  li.appendChild(delBtn);
+  li.appendChild(chk); li.appendChild(body); li.appendChild(del);
   return li;
 }
 
-function toggleEmptyState(el, show) {
-  show ? el.classList.add('visible') : el.classList.remove('visible');
-}
-
-/* ════════════════════════════════════════════
-   PROGRESS BAR
-════════════════════════════════════════════ */
-
 function updateProgress(total, done) {
-  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-  $progressFill.style.width = `${pct}%`;
-  $progressLabel.textContent = `${done} of ${total} task${total !== 1 ? 's' : ''} complete`;
-  $progressPct.textContent   = `${pct}%`;
-  $progressTrack.setAttribute('aria-valuenow', pct);
+  const pct = total ? Math.round((done/total)*100) : 0;
+  $progFill.style.width = pct+'%';
+  $progLabel.textContent = `${done} of ${total} task${total!==1?'s':''} complete`;
+  $progPct.textContent   = pct+'%';
+  $progTrack.setAttribute('aria-valuenow', pct);
 }
 
-/* ════════════════════════════════════════════
-   DARK MODE
-════════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════ */
 
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem(LS_THEME, theme);
-  // Update PWA theme-color meta tag
-  const metaTheme = document.getElementById('meta-theme-color');
-  if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#241508' : '#c0622a');
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem(LS_THEME, t);
+  const meta = document.getElementById('meta-theme-color');
+  if (meta) meta.content = t==='dark' ? '#241508' : '#c0622a';
 }
-
-function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme');
-  applyTheme(current === 'dark' ? 'light' : 'dark');
-}
-
 function loadTheme() {
-  const saved = localStorage.getItem(LS_THEME);
-  if (saved) { applyTheme(saved); return; }
-  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) applyTheme('dark');
+  const s = localStorage.getItem(LS_THEME);
+  if (s) { applyTheme(s); return; }
+  if (window.matchMedia?.('(prefers-color-scheme:dark)').matches) applyTheme('dark');
 }
+$themeBtn.addEventListener('click', () => {
+  applyTheme(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
+});
 
-$themeToggle.addEventListener('click', toggleTheme);
+/* ══════════════════════════════════════════
+   PWA — SERVICE WORKER
+═══════════════════════════════════════════ */
 
-/* ════════════════════════════════════════════
-   PWA SERVICE WORKER REGISTRATION
-════════════════════════════════════════════ */
-
-let deferredInstallPrompt = null;   // stored beforeinstallprompt event
-
-function registerServiceWorker() {
+function registerSW() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker
-      .register('./sw.js')
-      .then(reg => console.log('[PWA] Service worker registered, scope:', reg.scope))
-      .catch(err => console.warn('[PWA] SW registration failed:', err));
+    navigator.serviceWorker.register('./sw.js')
+      .then(r => console.log('[SW] registered', r.scope))
+      .catch(e => console.warn('[SW] failed', e));
   }
 }
 
-/* Listen for the browser's install prompt */
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();                     // prevent mini-infobar on mobile Chrome
-  deferredInstallPrompt = e;
+/* ══════════════════════════════════════════
+   PWA — INSTALL PROMPT
+═══════════════════════════════════════════ */
 
-  // Only show if user hasn't dismissed before
-  if (!localStorage.getItem(LS_INSTALL_DISMISSED)) {
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Only show install banner if onboarding is already done
+  if (localStorage.getItem(LS_ONBOARDED) && !localStorage.getItem(LS_INSTALL_DIS)) {
     showBanner($installBanner);
   }
 });
 
-/* "Install" button in banner */
-$installBtn.addEventListener('click', async () => {
-  if (!deferredInstallPrompt) return;
+async function triggerInstall() {
+  if (!deferredPrompt) return false;
   hideBanner($installBanner);
-  deferredInstallPrompt.prompt();
-  const { outcome } = await deferredInstallPrompt.userChoice;
-  console.log('[PWA] Install outcome:', outcome);
-  deferredInstallPrompt = null;
-});
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  return outcome === 'accepted';
+}
 
-/* Dismiss banner */
+$installBtn.addEventListener('click', triggerInstall);
 $installDismiss.addEventListener('click', () => {
   hideBanner($installBanner);
-  localStorage.setItem(LS_INSTALL_DISMISSED, '1');
+  localStorage.setItem(LS_INSTALL_DIS,'1');
 });
+window.addEventListener('appinstalled', () => { hideBanner($installBanner); deferredPrompt=null; });
 
-/* Hide banner once app is installed */
-window.addEventListener('appinstalled', () => {
-  hideBanner($installBanner);
-  deferredInstallPrompt = null;
-  console.log('[PWA] App installed!');
-});
-
-/* ── Banner helpers ── */
+/* ── Banner show/hide ── */
 function showBanner(el) {
   el.removeAttribute('hidden');
-  // Use rAF to allow display:flex before animation class
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => el.classList.add('visible'));
-  });
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('visible')));
 }
-
 function hideBanner(el) {
-  el.classList.remove('visible');
-  el.classList.add('hiding');
-  el.addEventListener('animationend', () => {
-    el.setAttribute('hidden', '');
-    el.classList.remove('hiding');
-  }, { once: true });
+  el.classList.remove('visible'); el.classList.add('hiding');
+  el.addEventListener('animationend',()=>{ el.setAttribute('hidden',''); el.classList.remove('hiding'); },{once:true});
 }
 
-/* ════════════════════════════════════════════
-   NOTIFICATIONS / ALARMS
-════════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   ONBOARDING (first visit)
+═══════════════════════════════════════════ */
 
-/**
- * Returns true if we have (or can get) notification permission.
- * Shows the banner if permission hasn't been granted or blocked.
- */
-function notificationsSupported() {
-  return 'Notification' in window;
+let onboardStep = 1;
+
+function detectPlatform() {
+  const ua = navigator.userAgent.toLowerCase();
+  if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+  if (/android/.test(ua)) return 'android';
+  return 'desktop';
 }
 
-function notificationsGranted() {
-  return notificationsSupported() && Notification.permission === 'granted';
+function openOnboarding() {
+  $onboardModal.removeAttribute('hidden');
+  showOnboardStep(1);
 }
 
-/* Update the bell-dot indicator */
-function updateBellUI() {
-  if (notificationsGranted()) {
-    $bellDot.removeAttribute('hidden');
-    $bellBtn.title = 'Notifications are ON';
+function showOnboardStep(n) {
+  onboardStep = n;
+  [$step1,$step2,$step3].forEach((s,i)=>s.hidden = i+1!==n);
+  $$dots.forEach((d,i)=>{
+    d.classList.toggle('onboard-dot--active', i+1===n);
+  });
+
+  if (n===2) {
+    const platform = detectPlatform();
+    document.getElementById('install-android').hidden = (platform!=='android' && platform!=='desktop');
+    document.getElementById('install-ios').hidden     = (platform!=='ios');
+    // Show direct install button if prompt is available
+    $onboardInstall.hidden = !deferredPrompt;
+  }
+}
+
+function finishOnboarding() {
+  $onboardModal.setAttribute('hidden','');
+  localStorage.setItem(LS_ONBOARDED,'1');
+}
+
+$next1.addEventListener('click', ()=>showOnboardStep(2));
+
+$onboardInstall.addEventListener('click', async () => {
+  const accepted = await triggerInstall();
+  if (accepted) showToast('App installed! 🎉');
+  showOnboardStep(3);
+});
+
+$skip2.addEventListener('click', ()=>showOnboardStep(3));
+
+$allowNotif.addEventListener('click', async ()=>{
+  await requestNotifPermission();
+  finishOnboarding();
+});
+
+$skipNotif.addEventListener('click', ()=>finishOnboarding());
+
+/* ══════════════════════════════════════════
+   NOTIFICATIONS
+═══════════════════════════════════════════ */
+
+function notifGranted() {
+  return 'Notification' in window && Notification.permission === 'granted';
+}
+
+function updateBell() {
+  $bellDot.hidden = !notifGranted();
+  $bellBtn.title  = notifGranted() ? 'Notifications ON' : 'Enable notifications';
+}
+
+$bellBtn.addEventListener('click', ()=>{
+  if (!('Notification' in window)) { showToast('Notifications not supported by this browser.'); return; }
+  if (notifGranted()) {
+    showToast('To disable: update site settings in your browser.');
   } else {
-    $bellDot.setAttribute('hidden', '');
-    $bellBtn.title = 'Enable notifications';
-  }
-}
-
-/* Bell button: toggle — if granted disable / if not, request */
-$bellBtn.addEventListener('click', () => {
-  if (!notificationsSupported()) {
-    alert('Your browser does not support notifications.');
-    return;
-  }
-  if (notificationsGranted()) {
-    // Can't programmatically revoke — direct user to browser settings
-    alert('To turn off notifications, please update your browser site settings for this page.');
-  } else {
-    requestNotificationPermission();
+    requestNotifPermission();
   }
 });
 
-/* Notification permission banner */
-function maybeShowNotifBanner() {
-  if (!notificationsSupported()) return;
-  if (notificationsGranted()) return;
-  if (Notification.permission === 'denied') return;
-  if (localStorage.getItem(LS_NOTIF_DENIED)) return;
-  // Show after 2 s so it doesn't compete with install banner
-  setTimeout(() => showBanner($notifBanner), 2000);
-}
-
-$notifAllowBtn.addEventListener('click', () => {
-  hideBanner($notifBanner);
-  requestNotificationPermission();
-});
-
-$notifDenyBtn.addEventListener('click', () => {
-  hideBanner($notifBanner);
-  localStorage.setItem(LS_NOTIF_DENIED, '1');
-});
-
-async function requestNotificationPermission() {
-  if (!notificationsSupported()) return;
-  const permission = await Notification.requestPermission();
-  updateBellUI();
-  if (permission === 'granted') {
-    // Fire a quick welcome notification
-    new Notification('Daily Task Manager 🔔', {
-      body: 'Great! You\'ll be notified when tasks are due.',
-      icon: './icons/icon-192.png',
-      badge: './icons/icon-72.png',
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return;
+  const perm = await Notification.requestPermission();
+  updateBell();
+  if (perm==='granted') {
+    new Notification('Daily Task Manager 🔔',{
+      body:"You'll be reminded when tasks are due.",
+      icon:'./icons/icon-192.png',
+      badge:'./icons/icon-72.png',
     });
+    showToast('Notifications enabled! 🔔');
+  } else {
+    showToast('Notifications blocked. You can allow them in browser settings.');
   }
 }
 
-/**
- * Main alarm polling — runs every 30 seconds.
- * Fires a notification the first time the current minute matches a task's time.
- */
 function startAlarmPoller() {
-  function checkAlarms() {
-    if (!notificationsGranted()) return;
-    const now = currentTimeHHMM();
-
-    tasks.forEach(task => {
-      if (!task.done && task.time && task.time === now && !task.notified) {
-        task.notified = true;   // mark so we don't re-fire in the same minute
-        saveTasks();
-        fireTaskNotification(task);
+  function check() {
+    if (!notifGranted()) return;
+    const now = hhMM();
+    tasks.forEach(t => {
+      if (!t.done && t.time && t.time===now && !t.notified) {
+        t.notified = true; saveTasks();
+        const n = new Notification('⏰ Task Reminder', {
+          body: `"${t.name}" is scheduled for ${fmtTime(t.time)}`,
+          icon: './icons/icon-192.png',
+          badge:'./icons/icon-72.png',
+          tag:  `task-${t.id}`,
+          requireInteraction: true,
+          vibrate:[200,100,200],
+        });
+        n.addEventListener('click',()=>{ window.focus(); n.close(); });
       }
     });
   }
-
-  checkAlarms();                           // check immediately on page load
-  setInterval(checkAlarms, 30_000);        // then every 30 s
+  check();
+  setInterval(check, 30_000);
 }
 
-function fireTaskNotification(task) {
-  const n = new Notification(`⏰ Task Reminder`, {
-    body: `"${task.name}" is scheduled for ${formatTime(task.time)}`,
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-72.png',
-    tag: `task-${task.id}`,               // prevents duplicate toasts for the same task
-    requireInteraction: true,             // stays until dismissed on desktop
-    vibrate: [200, 100, 200],             // mobile vibration pattern
+/* ══════════════════════════════════════════
+   SHARE / PDF
+═══════════════════════════════════════════ */
+
+let currentFmt = 'full';   // 'full' | 'pending' | 'done'
+
+/** Filter tasks by current format tab */
+function getFilteredTasks(fmt) {
+  if (fmt==='pending') return tasks.filter(t=>!t.done);
+  if (fmt==='done')    return tasks.filter(t=> t.done);
+  return tasks;
+}
+
+/** Sorted by time for pending, by completion for done */
+function sortedTasks(list) {
+  return [...list].sort((a,b)=>{
+    if (!a.time && !b.time) return 0;
+    if (!a.time) return 1; if (!b.time) return -1;
+    return a.time.localeCompare(b.time);
   });
-
-  n.addEventListener('click', () => {
-    window.focus();
-    n.close();
-  });
 }
 
-/* Reset notified flags at midnight so next-day tasks can fire again */
-function resetNotifiedFlags() {
-  tasks.forEach(t => { t.notified = false; });
-  saveTasks();
-}
+/* ── Build PDF preview in modal ── */
+function buildPreview(fmt) {
+  $pdfDatePrev.textContent = formatDate();
+  $pdfTasksPrev.innerHTML  = '';
 
-/* ════════════════════════════════════════════
-   SHARE TASKS
-════════════════════════════════════════════ */
+  const all       = tasks;
+  const pending   = all.filter(t=>!t.done);
+  const completed = all.filter(t=> t.done);
 
-let currentShareFmt = 'full';   // 'full' | 'pending' | 'done'
+  function renderSection(label, list) {
+    if (!list.length) return;
+    const lbl = document.createElement('div');
+    lbl.className   = 'pdf-section-label';
+    lbl.textContent = label + ` (${list.length})`;
+    $pdfTasksPrev.appendChild(lbl);
 
-/** Build the structured share text based on selected format */
-function buildShareText(fmt) {
-  const date = formatDate();
-  const pending   = tasks.filter(t => !t.done);
-  const completed = tasks.filter(t =>  t.done);
+    sortedTasks(list).forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'pdf-task-row';
 
-  const formatItem = (t, prefix) => {
-    const time = t.time ? ` [${formatTime(t.time)}]` : '';
-    return `  ${prefix} ${t.name}${time}`;
-  };
+      const chk = document.createElement('div');
+      chk.className = 'pdf-task-check' + (t.done?' pdf-task-check--done':'');
+      if (t.done) chk.innerHTML=`<svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg>`;
+      
+      const nm = document.createElement('div');
+      nm.className = 'pdf-task-name' + (t.done?' pdf-task-name--done':'');
+      nm.textContent = t.name;
 
-  let lines = [];
-  lines.push('╔══════════════════════════════╗');
-  lines.push('   📋 Daily Task Manager');
-  lines.push(`   ${date}`);
-  lines.push('╚══════════════════════════════╝');
-  lines.push('');
+      const tm = document.createElement('div');
+      tm.className   = 'pdf-task-time';
+      tm.textContent = t.time ? fmtTime(t.time) : '—';
 
-  if (fmt === 'full' || fmt === 'pending') {
-    lines.push(`📌 PENDING TASKS (${pending.length})`);
-    if (pending.length === 0) {
-      lines.push('  — None! 🎉');
-    } else {
-      // Sort pending by time
-      const sorted = [...pending].sort((a,b) => {
-        if (!a.time && !b.time) return 0;
-        if (!a.time) return 1;
-        if (!b.time) return -1;
-        return a.time.localeCompare(b.time);
-      });
-      sorted.forEach(t => lines.push(formatItem(t, '☐')));
-    }
-    lines.push('');
+      row.appendChild(chk); row.appendChild(nm); row.appendChild(tm);
+      $pdfTasksPrev.appendChild(row);
+    });
   }
 
-  if (fmt === 'full' || fmt === 'done') {
-    lines.push(`✅ COMPLETED TASKS (${completed.length})`);
-    if (completed.length === 0) {
-      lines.push('  — None yet.');
-    } else {
-      completed.forEach(t => lines.push(formatItem(t, '☑')));
-    }
-    lines.push('');
+  if (fmt==='full' || fmt==='pending') renderSection('📌 PENDING', pending);
+  if (fmt==='full' || fmt==='done')    renderSection('✅ COMPLETED', completed);
+
+  if (!$pdfTasksPrev.children.length) {
+    $pdfTasksPrev.innerHTML='<div style="text-align:center;padding:.75rem;color:var(--clr-text-muted);font-size:.82rem;">No tasks to show.</div>';
   }
 
-  // Summary footer
+  const total = all.length;
+  const done  = completed.length;
+  const pct   = total ? Math.round((done/total)*100) : 0;
+  $pdfFooter.textContent = `Progress: ${done}/${total} tasks completed (${pct}%)  ·  Generated by Daily Task Manager`;
+}
+
+/* ── Open share modal ── */
+function openShareModal() {
+  currentFmt = 'full';
+  document.querySelectorAll('.share-tab').forEach(b=>{
+    const a = b.dataset.fmt==='full';
+    b.classList.toggle('share-tab--active', a);
+    b.setAttribute('aria-selected', String(a));
+  });
+  buildPreview('full');
+  $pdfBtnLabel.textContent = 'Download PDF';
+  $copyLabel.textContent   = 'Copy Text';
+  $shareModal.removeAttribute('hidden');
+}
+
+function closeShareModal() { $shareModal.setAttribute('hidden',''); }
+
+$shareBtn.addEventListener('click', openShareModal);
+$shareClose.addEventListener('click', closeShareModal);
+$shareModal.addEventListener('click', e=>{ if(e.target===$shareModal) closeShareModal(); });
+
+/* Tabs */
+document.querySelectorAll('.share-tab').forEach(btn => {
+  btn.addEventListener('click', ()=>{
+    currentFmt = btn.dataset.fmt;
+    document.querySelectorAll('.share-tab').forEach(b=>{
+      const a = b===btn;
+      b.classList.toggle('share-tab--active',a);
+      b.setAttribute('aria-selected',String(a));
+    });
+    buildPreview(currentFmt);
+    $copyLabel.textContent   = 'Copy Text';
+    $pdfBtnLabel.textContent = 'Download PDF';
+  });
+});
+
+/* ── Generate PDF with jsPDF ── */
+function generatePDF() {
+  // jsPDF is loaded via CDN
+  if (typeof window.jspdf === 'undefined') {
+    showToast('PDF library not loaded yet. Please wait.'); return null;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const MARGIN = 20;
+  const CONTENT_W = W - MARGIN*2;
+  let y = MARGIN;
+
+  // ── Helper: add page if needed ──
+  function checkPage(needed=10) {
+    if (y + needed > H - MARGIN) {
+      doc.addPage();
+      y = MARGIN;
+      drawPageHeader();
+    }
+  }
+
+  // ── Header band ──
+  doc.setFillColor(192, 98, 42);
+  doc.rect(0, 0, W, 38, 'F');
+
+  // Logo circle
+  doc.setFillColor(255,255,255,0.25);
+  doc.setDrawColor(255,255,255);
+  doc.setLineWidth(0);
+  doc.circle(MARGIN+7, 19, 7, 'F');
+  doc.setTextColor(192,98,42);
+  doc.setFontSize(9);
+  doc.setFont('helvetica','bold');
+  doc.text('✓', MARGIN+7, 22, { align:'center' });
+
+  // Title
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica','bold');
+  doc.text('Daily Task Manager', MARGIN+18, 16);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica','normal');
+  doc.text(formatDate(), MARGIN+18, 24);
+
+  // Tab label
+  const tabLabel = currentFmt==='pending'?'Pending Tasks'
+                 : currentFmt==='done'   ?'Completed Tasks'
+                 : 'Full Day Report';
+  doc.setFontSize(8);
+  doc.setTextColor(255,220,190);
+  doc.text(tabLabel, W-MARGIN, 30, { align:'right' });
+
+  y = 48;
+
+  // ── Sub-header on subsequent pages ──
+  function drawPageHeader() {
+    doc.setFillColor(245,222,206);
+    doc.rect(MARGIN, y, CONTENT_W, 7, 'F');
+    doc.setTextColor(192,98,42);
+    doc.setFontSize(7);
+    doc.setFont('helvetica','bold');
+    doc.text('Daily Task Manager · ' + formatDate(), MARGIN+2, y+4.5);
+    y += 11;
+  }
+
+  // ── Divider ──
+  function divider(color=[230,210,195]) {
+    doc.setDrawColor(...color);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, W-MARGIN, y);
+    y += 4;
+  }
+
+  // ── Section heading ──
+  function sectionHead(label, count, r,g,b) {
+    checkPage(12);
+    doc.setFillColor(r,g,b);
+    doc.roundedRect(MARGIN, y, CONTENT_W, 8, 1.5, 1.5, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica','bold');
+    doc.text(label + `  (${count})`, MARGIN+4, y+5.2);
+    y += 11;
+  }
+
+  // ── Task row ──
+  function taskRow(t, accent) {
+    checkPage(12);
+    const ROW_H = 10;
+
+    // Row bg (alternating)
+    doc.setFillColor(252,248,244);
+    doc.roundedRect(MARGIN, y, CONTENT_W, ROW_H, 1, 1, 'F');
+
+    // Checkbox
+    const cx = MARGIN+5, cy = y+5;
+    if (t.done) {
+      doc.setFillColor(58,125,90);
+      doc.circle(cx, cy, 2.8, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(6);
+      doc.text('✓', cx, cy+1, {align:'center'});
+    } else {
+      doc.setDrawColor(...accent);
+      doc.setLineWidth(0.4);
+      doc.circle(cx, cy, 2.8);
+    }
+
+    // Task name
+    doc.setFont('helvetica', t.done?'normal':'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(t.done?150:43, t.done?130:31, t.done?110:20);
+
+    const name = t.name.length>52 ? t.name.slice(0,52)+'…' : t.name;
+    if (t.done) {
+      // Strikethrough simulation
+      doc.text(name, MARGIN+11, y+5.8);
+      const tw = doc.getTextWidth(name);
+      doc.setDrawColor(150,130,110);
+      doc.setLineWidth(0.3);
+      doc.line(MARGIN+11, y+5, MARGIN+11+tw, y+5);
+    } else {
+      doc.text(name, MARGIN+11, y+5.8);
+    }
+
+    // Time badge
+    if (t.time) {
+      const timeStr = fmtTime(t.time);
+      const TW = doc.getTextWidth(timeStr)+4;
+      const tx = W-MARGIN-TW-1;
+      doc.setFillColor(...accent, 30);
+      doc.setFillColor(245,222,206);
+      doc.roundedRect(tx, y+2, TW, 5.5, 1, 1, 'F');
+      doc.setTextColor(...accent);
+      doc.setFontSize(7);
+      doc.setFont('helvetica','normal');
+      doc.text('🕐 '+timeStr, tx+2, y+5.8);
+    } else {
+      doc.setTextColor(185,155,125);
+      doc.setFontSize(7);
+      doc.setFont('helvetica','normal');
+      doc.text('No time set', W-MARGIN-20, y+5.8);
+    }
+
+    y += ROW_H + 2;
+  }
+
+  // ── Render sections ──
+  const pending   = tasks.filter(t=>!t.done);
+  const completed = tasks.filter(t=> t.done);
+
+  if (currentFmt==='full'||currentFmt==='pending') {
+    sectionHead('📌  PENDING TASKS', pending.length, 192,98,42);
+    if (!pending.length) {
+      checkPage(10);
+      doc.setTextColor(185,155,125); doc.setFontSize(9); doc.setFont('helvetica','italic');
+      doc.text('No pending tasks — great job! 🎉', MARGIN+4, y+5); y+=12;
+    } else {
+      sortedTasks(pending).forEach(t=>taskRow(t,[192,98,42]));
+    }
+    y += 4;
+  }
+
+  if (currentFmt==='full'||currentFmt==='done') {
+    checkPage(12);
+    sectionHead('✅  COMPLETED TASKS', completed.length, 58,125,90);
+    if (!completed.length) {
+      checkPage(10);
+      doc.setTextColor(185,155,125); doc.setFontSize(9); doc.setFont('helvetica','italic');
+      doc.text('No completed tasks yet.', MARGIN+4, y+5); y+=12;
+    } else {
+      sortedTasks(completed).forEach(t=>taskRow(t,[58,125,90]));
+    }
+    y += 4;
+  }
+
+  // ── Progress summary ──
+  checkPage(28);
+  y += 4;
+  divider();
+
   const total = tasks.length;
-  const pct   = total === 0 ? 0 : Math.round((completed.length / total) * 100);
-  lines.push(`📊 Progress: ${completed.length}/${total} tasks done (${pct}%)`);
-  lines.push('');
-  lines.push('— Sent from Daily Task Manager');
+  const done  = completed.length;
+  const pct   = total ? Math.round((done/total)*100) : 0;
 
+  doc.setTextColor(122,92,66); doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.text('Progress Summary', MARGIN, y); y+=6;
+
+  // Progress bar
+  doc.setFillColor(240,226,212);
+  doc.roundedRect(MARGIN, y, CONTENT_W, 5, 2, 2, 'F');
+  if (pct>0) {
+    doc.setFillColor(192,98,42);
+    doc.roundedRect(MARGIN, y, (CONTENT_W*pct)/100, 5, 2, 2, 'F');
+  }
+  doc.setTextColor(192,98,42); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text(`${pct}%`, W-MARGIN, y+3.8, {align:'right'}); y+=9;
+
+  doc.setTextColor(122,92,66); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text(`${done} of ${total} task${total!==1?'s':''} completed`, MARGIN, y); y+=10;
+
+  // ── Footer ──
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i=1;i<=pageCount;i++) {
+    doc.setPage(i);
+    doc.setFillColor(245,222,206);
+    doc.rect(0, H-10, W, 10, 'F');
+    doc.setTextColor(192,98,42); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text('Generated by Daily Task Manager', MARGIN, H-4);
+    doc.text(`${formatDate()}  ·  Page ${i} of ${pageCount}`, W-MARGIN, H-4, {align:'right'});
+  }
+
+  return doc;
+}
+
+/* ── Download PDF button ── */
+$dlPdfBtn.addEventListener('click', async () => {
+  $pdfBtnLabel.textContent = 'Generating…';
+  $dlPdfBtn.disabled = true;
+
+  // Small delay for UX
+  await new Promise(r=>setTimeout(r,100));
+
+  try {
+    const doc = generatePDF();
+    if (!doc) { $pdfBtnLabel.textContent='Download PDF'; $dlPdfBtn.disabled=false; return; }
+    const fileName = `tasks-${todayISO()}.pdf`;
+    doc.save(fileName);
+    showToast('PDF downloaded! 📄');
+    $pdfBtnLabel.textContent = '✓ Downloaded!';
+    setTimeout(()=>{ $pdfBtnLabel.textContent='Download PDF'; }, 3000);
+  } catch(e) {
+    console.error('PDF error:', e);
+    showToast('PDF generation failed. Try copying text instead.');
+    $pdfBtnLabel.textContent = 'Download PDF';
+  }
+  $dlPdfBtn.disabled = false;
+});
+
+/* ── Copy plain text ── */
+function buildPlainText(fmt) {
+  const dateStr = formatDate();
+  const pending   = tasks.filter(t=>!t.done);
+  const completed = tasks.filter(t=> t.done);
+  const fmtItem   = t => `  ${t.done?'☑':'☐'} ${t.name}${t.time?' ['+fmtTime(t.time)+']':''}`;
+
+  const lines = [
+    '══════════════════════════',
+    '  📋 Daily Task Manager',
+    `  ${dateStr}`,
+    '══════════════════════════',''
+  ];
+
+  if (fmt==='full'||fmt==='pending') {
+    lines.push(`📌 PENDING (${pending.length})`);
+    if (!pending.length) lines.push('  — None! 🎉');
+    else sortedTasks(pending).forEach(t=>lines.push(fmtItem(t)));
+    lines.push('');
+  }
+  if (fmt==='full'||fmt==='done') {
+    lines.push(`✅ COMPLETED (${completed.length})`);
+    if (!completed.length) lines.push('  — None yet.');
+    else sortedTasks(completed).forEach(t=>lines.push(fmtItem(t)));
+    lines.push('');
+  }
+
+  const total = tasks.length, done = completed.length;
+  const pct   = total ? Math.round((done/total)*100) : 0;
+  lines.push(`📊 Progress: ${done}/${total} done (${pct}%)`);
+  lines.push('— Sent from Daily Task Manager');
   return lines.join('\n');
 }
 
-/** Open the share modal */
-function openShareModal() {
-  currentShareFmt = 'full';
-  // Reset tabs
-  document.querySelectorAll('.share-tab').forEach(btn => {
-    const active = btn.dataset.fmt === 'full';
-    btn.classList.toggle('share-tab--active', active);
-    btn.setAttribute('aria-selected', String(active));
-  });
-  $sharePreview.textContent = buildShareText('full');
-  $shareModal.removeAttribute('hidden');
-  $copyLabel.textContent = 'Copy Text';
-}
-
-function closeShareModal() { $shareModal.setAttribute('hidden', ''); }
-
-$shareBtn.addEventListener('click', openShareModal);
-
-$shareModalClose.addEventListener('click', closeShareModal);
-
-$shareModal.addEventListener('click', (e) => {
-  if (e.target === $shareModal) closeShareModal();
-});
-
-/* Tab switching */
-document.querySelectorAll('.share-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    currentShareFmt = btn.dataset.fmt;
-    document.querySelectorAll('.share-tab').forEach(b => {
-      const active = b === btn;
-      b.classList.toggle('share-tab--active', active);
-      b.setAttribute('aria-selected', String(active));
-    });
-    $sharePreview.textContent = buildShareText(currentShareFmt);
-    $copyLabel.textContent = 'Copy Text';
-  });
-});
-
-/* Copy to clipboard */
-$shareCopyBtn.addEventListener('click', async () => {
-  const text = buildShareText(currentShareFmt);
+$copyBtn.addEventListener('click', async ()=>{
+  const text = buildPlainText(currentFmt);
   try {
     await navigator.clipboard.writeText(text);
-    $copyLabel.textContent = '✓ Copied!';
-    setTimeout(() => { $copyLabel.textContent = 'Copy Text'; }, 2500);
+    $copyLabel.textContent='✓ Copied!';
+    showToast('Copied to clipboard!');
   } catch {
-    // Fallback for older browsers
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.cssText = 'position:fixed;opacity:0;';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    $copyLabel.textContent = '✓ Copied!';
-    setTimeout(() => { $copyLabel.textContent = 'Copy Text'; }, 2500);
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText='position:fixed;opacity:0;';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    $copyLabel.textContent='✓ Copied!';
+    showToast('Copied to clipboard!');
   }
+  setTimeout(()=>{ $copyLabel.textContent='Copy Text'; }, 3000);
 });
 
-/* Native Web Share API */
-$shareNativeBtn.addEventListener('click', async () => {
-  const text = buildShareText(currentShareFmt);
+/* ── Native share (PDF file if supported, else text) ── */
+$shareNative.addEventListener('click', async ()=>{
+  const text  = buildPlainText(currentFmt);
   const title = `My Tasks — ${formatDate()}`;
 
+  // Try to share PDF file via native share
+  try {
+    const doc = generatePDF();
+    if (doc && navigator.canShare) {
+      const pdfBlob = doc.output('blob');
+      const file    = new File([pdfBlob], `tasks-${todayISO()}.pdf`, { type:'application/pdf' });
+      if (navigator.canShare({ files:[file] })) {
+        await navigator.share({ title, files:[file] });
+        closeShareModal();
+        return;
+      }
+    }
+  } catch(e) { /* fall through to text share */ }
+
+  // Text share fallback
   if (navigator.share) {
     try {
       await navigator.share({ title, text });
-      closeShareModal();
-    } catch (err) {
-      // User cancelled or share failed — don't throw
-      if (err.name !== 'AbortError') console.warn('[Share] Error:', err);
-    }
-  } else {
-    // Fallback: open mail client
-    const subject = encodeURIComponent(title);
-    const body    = encodeURIComponent(text);
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+      closeShareModal(); return;
+    } catch(e) { if(e.name!=='AbortError') console.warn(e); return; }
   }
+
+  // Email fallback
+  window.open(`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`,'_blank');
 });
 
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    CLEAR BUTTONS
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
-$clearAll.addEventListener('click', () => {
-  if (!tasks.filter(t => !t.done).length) return;
+$clearAll.addEventListener('click', ()=>{
+  if (!tasks.filter(t=>!t.done).length) return;
   if (!confirm('Delete all pending tasks?')) return;
-  tasks = tasks.filter(t => t.done);
-  saveTasks(); renderAll();
+  tasks = tasks.filter(t=>t.done); saveTasks(); renderAll();
+});
+$clearDone.addEventListener('click', ()=>{
+  if (!tasks.filter(t=>t.done).length) return;
+  tasks = tasks.filter(t=>!t.done); saveTasks(); renderAll();
 });
 
-$clearDone.addEventListener('click', () => {
-  if (!tasks.filter(t => t.done).length) return;
-  tasks = tasks.filter(t => !t.done);
-  saveTasks(); renderAll();
-});
+/* ══════════════════════════════════════════
+   KEYBOARD
+═══════════════════════════════════════════ */
 
-/* ════════════════════════════════════════════
-   KEYBOARD SHORTCUTS
-════════════════════════════════════════════ */
-
-$taskName.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
+$taskName.addEventListener('keydown', e=>{ if(e.key==='Enter') addTask(); });
 $addBtn.addEventListener('click', addTask);
-
-// Escape closes any open modal
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeShareModal();
-    closeCarryModal();
-  }
+document.addEventListener('keydown', e=>{
+  if (e.key==='Escape') { closeShareModal(); closeModal($carryModal); }
 });
 
-/* ════════════════════════════════════════════
-   SHAKE STYLE INJECTION
-════════════════════════════════════════════ */
-(function injectShakeStyle() {
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes shake {
-      0%,100% { transform:translateX(0); }
-      20%      { transform:translateX(-6px); }
-      40%      { transform:translateX(6px); }
-      60%      { transform:translateX(-4px); }
-      80%      { transform:translateX(4px); }
-    }
-    .shake { animation:shake 0.45s ease; }
-  `;
-  document.head.appendChild(style);
-})();
+/* ══════════════════════════════════════════
+   MODAL HELPERS
+═══════════════════════════════════════════ */
+function openModal(el)  { el.removeAttribute('hidden'); }
+function closeModal(el) { el.setAttribute('hidden',''); }
 
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    CONFETTI
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
 function launchConfetti() {
-  const canvas = $confettiCanvas;
-  const ctx    = canvas.getContext('2d');
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
-  const COLORS = ['#c0622a','#e07a48','#f5a060','#3a7d5a','#5aad7a','#fce4cc','#fad2d2','#c9e4d8'];
-  const COUNT  = 180;
-  const particles = Array.from({ length: COUNT }, () => ({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height - canvas.height,
-    r: Math.random() * 8 + 4,
-    d: Math.random() * COUNT,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
-    tiltAngleIncrementor: Math.random() * 0.07 + 0.05,
-    tiltAngle: 0,
-    vx: Math.random() * 3 - 1.5,
-    vy: Math.random() * 3 + 2,
+  const canvas = $confetti, ctx = canvas.getContext('2d');
+  canvas.width=innerWidth; canvas.height=innerHeight;
+  const COLS=['#c0622a','#e07a48','#f5a060','#3a7d5a','#5aad7a','#fce4cc','#fad2d2'];
+  const P=Array.from({length:180},()=>({
+    x:Math.random()*canvas.width, y:Math.random()*canvas.height-canvas.height,
+    r:Math.random()*8+4, d:Math.random()*180,
+    color:COLS[Math.floor(Math.random()*COLS.length)],
+    tA:0, tI:Math.random()*.07+.05,
+    vx:Math.random()*3-1.5, vy:Math.random()*3+2,
   }));
-  let angle = 0;
-  const startTime = Date.now();
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    angle += 0.01;
-    particles.forEach(p => {
-      p.tiltAngle += p.tiltAngleIncrementor;
-      p.y += p.vy;
-      p.x += p.vx + Math.sin(angle + p.d) * 1.5;
-      const tilt = Math.sin(p.tiltAngle - p.d / 3) * 15;
-      ctx.beginPath();
-      ctx.lineWidth   = p.r / 2;
-      ctx.strokeStyle = p.color;
-      ctx.moveTo(p.x + tilt + p.r / 4, p.y);
-      ctx.lineTo(p.x + tilt, p.y + tilt + p.r / 4);
-      ctx.stroke();
+  let a=0; const t0=Date.now();
+  (function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height); a+=.01;
+    P.forEach(p=>{
+      p.tA+=p.tI; p.y+=p.vy; p.x+=p.vx+Math.sin(a+p.d)*1.5;
+      const tilt=Math.sin(p.tA-p.d/3)*15;
+      ctx.beginPath(); ctx.lineWidth=p.r/2; ctx.strokeStyle=p.color;
+      ctx.moveTo(p.x+tilt+p.r/4,p.y); ctx.lineTo(p.x+tilt,p.y+tilt+p.r/4); ctx.stroke();
     });
-    if (Date.now() - startTime < 3500) requestAnimationFrame(draw);
-    else ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-  draw();
+    if(Date.now()-t0<3500) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  })();
 }
 
-/* ════════════════════════════════════════════
+/* ══════════════════════════════════════════
    INIT
-════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 
 function init() {
-  $todayDate.textContent = formatDate();
-
-  // Theme
+  $date.textContent = formatDate();
   loadTheme();
-
-  // Register service worker (PWA)
-  registerServiceWorker();
-
-  // Tasks
+  registerSW();
   loadTasks();
-  checkDayRollover();
+  checkRollover();
   renderAll();
-
-  // Midnight polling
-  scheduleMidnightCheck();
-
-  // Notifications
-  updateBellUI();
-  maybeShowNotifBanner();
+  updateBell();
   startAlarmPoller();
 
-  // Focus input
+  // Show onboarding on first visit
+  if (!localStorage.getItem(LS_ONBOARDED)) {
+    setTimeout(openOnboarding, 400);
+  }
+
   $taskName.focus();
 }
 
