@@ -1,39 +1,147 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <title>Daily Task Manager</title>
-    <link rel="stylesheet" href="style.css">
-</head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Task Manager</title>
 
+  <!-- Google Fonts: Playfair Display (display) + DM Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
 <body>
 
-<div class="container">
+  <!-- ── Ambient background blobs ── -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
 
-<h1>Daily Task Manager</h1>
+  <!-- ── Confetti canvas (rendered by JS) ── -->
+  <canvas id="confetti-canvas"></canvas>
 
-<div class="task-input">
+  <!-- ═══════════════════════════════════════════
+       APP CARD
+  ════════════════════════════════════════════ -->
+  <main class="card" role="main">
 
-<input type="text" id="taskInput" placeholder="Enter your task">
+    <!-- ── Header ── -->
+    <header class="card__header">
+      <div class="header__left">
+        <span class="header__eyebrow">Today's Focus</span>
+        <h1 class="header__title">Daily Task<br /><em>Manager</em></h1>
+        <p class="header__date" id="today-date"></p>
+      </div>
 
-<input type="time" id="taskTime">
+      <div class="header__right">
+        <!-- Dark-mode toggle -->
+        <button class="btn-icon" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <svg class="icon icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="icon icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
 
-<button class="add-btn" onclick="addTask()">Add</button>
+    <!-- ── Progress bar ── -->
+    <section class="progress-section" aria-label="Task progress">
+      <div class="progress-meta">
+        <span id="progress-label">0 of 0 tasks complete</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div class="progress-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" id="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </section>
 
-</div>
+    <!-- ── Task input ── -->
+    <section class="input-section" aria-label="Add a new task">
+      <div class="input-group">
+        <label for="task-name" class="sr-only">Task name</label>
+        <input
+          type="text"
+          id="task-name"
+          class="input input--text"
+          placeholder="What do you need to do?"
+          maxlength="120"
+          autocomplete="off"
+        />
+      </div>
 
-<h2>Today's Tasks</h2>
+      <div class="input-row">
+        <div class="input-group input-group--time">
+          <label for="task-time" class="input-label">Time</label>
+          <input type="time" id="task-time" class="input input--time" />
+        </div>
 
-<ul id="taskList"></ul>
+        <button class="btn btn--primary" id="add-task-btn" aria-label="Add task">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Task
+        </button>
+      </div>
+    </section>
 
-<h2>Completed Tasks</h2>
+    <!-- ── Today's Tasks ── -->
+    <section class="tasks-section" aria-label="Today's tasks">
+      <div class="section-header">
+        <h2 class="section-title">
+          Today's Tasks
+          <span class="badge" id="pending-count">0</span>
+        </h2>
+        <button class="btn btn--ghost btn--sm" id="clear-all-btn" title="Delete all pending tasks">Clear all</button>
+      </div>
 
-<ul id="completedList"></ul>
+      <ul class="task-list" id="pending-list" role="list">
+        <!-- Tasks injected by JS -->
+      </ul>
 
-</div>
+      <div class="empty-state" id="pending-empty">
+        <div class="empty-state__icon">✦</div>
+        <p>No tasks yet — add one above!</p>
+      </div>
+    </section>
 
-<script src="script.js"></script>
+    <!-- ── Completed Tasks ── -->
+    <section class="tasks-section tasks-section--completed" aria-label="Completed tasks">
+      <div class="section-header">
+        <h2 class="section-title section-title--completed">
+          Completed
+          <span class="badge badge--done" id="done-count">0</span>
+        </h2>
+        <button class="btn btn--ghost btn--sm" id="clear-done-btn" title="Clear completed tasks">Clear</button>
+      </div>
 
+      <ul class="task-list" id="done-list" role="list">
+        <!-- Completed tasks injected by JS -->
+      </ul>
+
+      <div class="empty-state" id="done-empty">
+        <div class="empty-state__icon">◎</div>
+        <p>Completed tasks will appear here.</p>
+      </div>
+    </section>
+
+  </main><!-- /.card -->
+
+  <!-- ── Carry-forward modal ── -->
+  <div class="modal-overlay" id="carry-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal">
+      <h2 class="modal__title" id="modal-title">🌅 Good morning!</h2>
+      <p class="modal__body">
+        It's a new day. You had <strong id="carry-count">0</strong> incomplete task(s) from yesterday.
+        Would you like to carry them forward?
+      </p>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" id="modal-discard">Start Fresh</button>
+        <button class="btn btn--primary" id="modal-carry">Carry Forward</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
