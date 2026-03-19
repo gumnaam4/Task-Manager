@@ -379,6 +379,7 @@ function detectPlatform() {
 }
 
 function openOnboarding() {
+  $onboardModal.style.display = '';      // clear any inline style from finishOnboarding
   $onboardModal.removeAttribute('hidden');
   showOnboardStep(1);
 }
@@ -400,26 +401,42 @@ function showOnboardStep(n) {
 }
 
 function finishOnboarding() {
-  $onboardModal.setAttribute('hidden','');
-  localStorage.setItem(LS_ONBOARDED,'1');
+  // Belt-and-suspenders: both setAttribute AND direct style,
+  // so the display:flex rule on .modal-overlay can never win.
+  $onboardModal.setAttribute('hidden', '');
+  $onboardModal.style.display = 'none';
+  localStorage.setItem(LS_ONBOARDED, '1');
 }
 
-$next1.addEventListener('click', ()=>showOnboardStep(2));
+// Step 1 → Step 2
+$next1.addEventListener('click', () => showOnboardStep(2));
 
+// Step 2: Chrome direct-install button → Step 3
 $onboardInstall.addEventListener('click', async () => {
   const accepted = await triggerInstall();
   if (accepted) showToast('App installed! 🎉');
   showOnboardStep(3);
 });
 
-$skip2.addEventListener('click', ()=>showOnboardStep(3));
+// Step 2: "Skip" → close the whole dialog immediately (don't force step 3)
+$skip2.addEventListener('click', () => finishOnboarding());
 
-$allowNotif.addEventListener('click', async ()=>{
+// Step 3: allow notifications, then close
+$allowNotif.addEventListener('click', async () => {
   await requestNotifPermission();
   finishOnboarding();
 });
 
-$skipNotif.addEventListener('click', ()=>finishOnboarding());
+// Step 3: skip notifications → close
+$skipNotif.addEventListener('click', () => finishOnboarding());
+
+// X close button (always visible, top-right of modal)
+document.getElementById('onboard-close').addEventListener('click', () => finishOnboarding());
+
+// Clicking the dark backdrop also closes the onboarding
+$onboardModal.addEventListener('click', e => {
+  if (e.target === $onboardModal) finishOnboarding();
+});
 
 /* ══════════════════════════════════════════
    NOTIFICATIONS
