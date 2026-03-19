@@ -333,7 +333,13 @@ let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  // Only show install banner if onboarding is already done
+
+  // Don't show the banner if the app is already installed / running standalone
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                    || window.navigator.standalone === true;
+  if (isStandalone) return;
+
+  // Only show install banner for returning users who already finished onboarding
   if (localStorage.getItem(LS_ONBOARDED) && !localStorage.getItem(LS_INSTALL_DIS)) {
     showBanner($installBanner);
   }
@@ -357,12 +363,22 @@ window.addEventListener('appinstalled', () => { hideBanner($installBanner); defe
 
 /* ── Banner show/hide ── */
 function showBanner(el) {
+  el.style.display = '';              // clear any inline display:none
   el.removeAttribute('hidden');
-  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('visible')));
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('visible')));
 }
 function hideBanner(el) {
-  el.classList.remove('visible'); el.classList.add('hiding');
-  el.addEventListener('animationend',()=>{ el.setAttribute('hidden',''); el.classList.remove('hiding'); },{once:true});
+  el.classList.remove('visible');
+  el.classList.add('hiding');
+
+  function finish() {
+    el.setAttribute('hidden', '');
+    el.style.display = 'none';        // belt-and-suspenders
+    el.classList.remove('hiding');
+  }
+  // Guaranteed close: animation end OR 400 ms timeout, whichever comes first
+  const t = setTimeout(finish, 400);
+  el.addEventListener('animationend', () => { clearTimeout(t); finish(); }, { once: true });
 }
 
 /* ══════════════════════════════════════════
@@ -379,30 +395,56 @@ function detectPlatform() {
 }
 
 function openOnboarding() {
-  $onboardModal.style.display = '';      // clear any inline style from finishOnboarding
+  $onboardModal.style.display = '';   // clear any leftover inline style
   $onboardModal.removeAttribute('hidden');
   showOnboardStep(1);
 }
 
 function showOnboardStep(n) {
   onboardStep = n;
-  [$step1,$step2,$step3].forEach((s,i)=>s.hidden = i+1!==n);
-  $$dots.forEach((d,i)=>{
-    d.classList.toggle('onboard-dot--active', i+1===n);
+
+  // Use both .hidden attribute AND a class for maximum reliability
+  [$step1, $step2, $step3].forEach((el, i) => {
+    if (i + 1 === n) {
+      el.removeAttribute('hidden');
+      el.style.display = '';          // let CSS flex take over
+    } else {
+      el.setAttribute('hidden', '');
+      el.style.display = 'none';      // belt-and-suspenders
+    }
   });
 
-  if (n===2) {
+  // Update progress dots
+  $$dots.forEach((d, i) => d.classList.toggle('onboard-dot--active', i + 1 === n));
+
+  // Step 2: show the right platform instructions
+  if (n === 2) {
     const platform = detectPlatform();
-    document.getElementById('install-android').hidden = (platform!=='android' && platform!=='desktop');
-    document.getElementById('install-ios').hidden     = (platform!=='ios');
-    // Show direct install button if prompt is available
-    $onboardInstall.hidden = !deferredPrompt;
+    const $android = document.getElementById('install-android');
+    const $ios     = document.getElementById('install-ios');
+
+    // Show android instructions for Android AND desktop; iOS for iOS
+    if (platform === 'ios') {
+      $android.setAttribute('hidden', ''); $android.style.display = 'none';
+      $ios.removeAttribute('hidden');      $ios.style.display = '';
+    } else {
+      $android.removeAttribute('hidden');  $android.style.display = '';
+      $ios.setAttribute('hidden', '');     $ios.style.display = 'none';
+    }
+
+    // Only show direct-install button when the browser prompt is ready
+    if (deferredPrompt) {
+      $onboardInstall.removeAttribute('hidden');
+      $onboardInstall.style.display = '';
+    } else {
+      $onboardInstall.setAttribute('hidden', '');
+      $onboardInstall.style.display = 'none';
+    }
   }
 }
 
 function finishOnboarding() {
-  // Belt-and-suspenders: both setAttribute AND direct style,
-  // so the display:flex rule on .modal-overlay can never win.
+  // Triple-lock: attribute + inline style + add hidden attr to children
   $onboardModal.setAttribute('hidden', '');
   $onboardModal.style.display = 'none';
   localStorage.setItem(LS_ONBOARDED, '1');
