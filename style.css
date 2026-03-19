@@ -1,44 +1,128 @@
-body{
-    font-family: Arial;
-    background:#f4f4f4;
-    text-align:center;
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
+
+body{
+    height:100vh;
+    background: linear-gradient(135deg,#667eea,#764ba2);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+/* Main Container */
+
+.container{
+    width:500px;
+    background:rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    border-radius:15px;
+    padding:30px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.2);
+    color:white;
+}
+
+/* Title */
 
 h1{
-    margin-top:30px;
+    text-align:center;
+    margin-bottom:20px;
+    font-weight:600;
 }
+
+/* Input Section */
 
 .task-input{
-    margin:20px;
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
 }
 
-input{
-    padding:8px;
-    margin:5px;
+.task-input input{
+    padding:10px;
+    border:none;
+    border-radius:8px;
+    outline:none;
 }
+
+#taskInput{
+    flex:1;
+}
+
+/* Add Button */
 
 button{
-    padding:8px 12px;
+    border:none;
+    padding:10px 15px;
+    border-radius:8px;
     cursor:pointer;
+    font-weight:600;
+    transition:0.2s;
 }
 
-ul{
-    list-style:none;
-    padding:0;
+button:hover{
+    transform:scale(1.05);
 }
+
+/* Add button */
+
+.add-btn{
+    background:#00e676;
+    color:black;
+}
+
+/* Task Lists */
+
+h2{
+    margin-top:20px;
+    margin-bottom:10px;
+}
+
+/* Task Card */
 
 li{
+    list-style:none;
     background:white;
-    margin:10px auto;
-    width:300px;
-    padding:10px;
+    color:black;
+    padding:12px;
+    border-radius:8px;
+    margin-bottom:10px;
     display:flex;
     justify-content:space-between;
     align-items:center;
-    border-radius:5px;
+    transition:0.2s;
 }
+
+li:hover{
+    transform:translateX(5px);
+}
+
+/* Buttons inside task */
+
+.task-buttons button{
+    margin-left:5px;
+}
+
+/* Complete */
+
+.complete-btn{
+    background:#4caf50;
+    color:white;
+}
+
+/* Delete */
+
+.delete-btn{
+    background:#ff5252;
+    color:white;
+}
+
+/* Completed tasks */
 
 .completed{
     text-decoration:line-through;
-    color:gray;
+    opacity:0.6;
 }
